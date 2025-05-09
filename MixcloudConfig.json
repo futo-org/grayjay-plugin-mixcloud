@@ -1,0 +1,24 @@
+{
+  "name": "Mixcloud (Alpha)",
+  "platformUrl": "https://www.mixcloud.com",
+  "description": "Listen to the best DJs and radio presenters in the world for free.",
+  "author": "FUTO",
+  "authorUrl": "https://futo.org",
+  "sourceUrl": "https://plugins.grayjay.app/Mixcloud/MixcloudConfig.json",
+  "scriptUrl": "./MixcloudScript.js",
+  "iconUrl": "./MixcloudIcon.png",
+  "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
+  "version": 1,
+  "id": "84331338-b045-419c-88e4-c86036f4cbf5",
+  "scriptSignature": "",
+  "scriptPublicKey": "",
+  "packages": [
+    "Http",
+    "Utilities"
+  ],
+  "allowEval": false,
+  "allowUrls": [
+    ".mixcloud.com",
+    ".mixcloud.stream"
+  ]
+}
