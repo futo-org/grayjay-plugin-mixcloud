@@ -6,15 +6,17 @@
 
 // ---------------------- Constants ----------------------
 const PLATFORM = {
-  name: "Mixcloud",
-  id: "mixcloud",
-  url: "https://mixcloud.com",
-  GRAPHQL_URL: "https://app.mixcloud.com/graphql"
+  name: "Mixcloud"
 };
+
+const URLS = {
+  GRAPHQL_URL: "https://app.mixcloud.com/graphql",
+  BASE_URL: "https://www.mixcloud.com"
+}
 
 // Default request headers for API requests
 const DEFAULT_REST_HEADERS = {
-  "Origin": "https://www.mixcloud.com",
+  "Origin": URLS.BASE_URL,
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
   "Content-Type": "application/json"
 };
@@ -597,10 +599,10 @@ function makeGraphQLRequest(queryName, variables, operationName) {
       variables: variables
     };
 
-    const response = makeRequestWithRetry('POST', PLATFORM.GRAPHQL_URL, JSON.stringify(queryInfo), DEFAULT_REST_HEADERS, { parseResponse: true });
+    const response = makeRequestWithRetry('POST', URLS.GRAPHQL_URL, JSON.stringify(queryInfo), DEFAULT_REST_HEADERS, { parseResponse: true });
 
     if (!response.isOk) {
-      logError(`GraphQL request failed. Query: ${queryName}, Status: ${response.status}`);
+      logError(`GraphQL request failed. Query: ${queryName}, Status: ${response.code}`);
       return null;
     }
 
