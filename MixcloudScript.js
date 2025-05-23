@@ -23,10 +23,21 @@ const DEFAULT_REST_HEADERS = {
 
 // Regular expressions for URL matching
 const REGEX = {
+  // Content URLs
   LIVE_STREAM_URL: /^https:\/\/www\.mixcloud\.com\/live\/([a-zA-Z0-9_-]+)\/?$/,
   CONTENT_DETAILS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/([^\/]+)\/?$/, // Permissive pattern to handle multiple scripts such as Mandarin
-  CHANNEL_URL: /^https:\/\/www\.mixcloud\.com\/([a-zA-Z0-9_-]+)\/?$/
+  CHANNEL_URL: /^https:\/\/www\.mixcloud\.com\/([a-zA-Z0-9_-]+)\/?$/,
+  
+  // Playlist URLs
+  PLAYLIST_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/playlists\/([^\/]+)\/?$/,
+  PLAYLISTS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/playlists\/?$/,
+  FAVORITES_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/favorites\/?$/,
+  HISTORY_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/listens\/?$/,
+  REPOSTS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/reposts\/?$/,
+  TRACKS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/tracks\/?$/
 };
+
+Type.Feed.Playlists = "PLAYLISTS";
 
 // list of URLs that should not be matched on source.isChannelUrl, source.isContentDetailsUrl, source.isPlaylistUrl
 // since mixcloud does not have a dedicated perfix url for channels and published content
@@ -200,7 +211,7 @@ source.getLiveChatWindow = function (url) {
     const username = usernameMatch[1];
 
     return {
-      url: `${createMixcloudUrl(username, null, true)}chat/`,
+      url: `${createMixcloudUrl(username, null, true)}/chat/`,
       removeElements: [],
       removeElementsInterval: []
     };
@@ -277,11 +288,25 @@ source.getChannel = function (url) {
 };
 
 /**
+ * Gets channel capabilities
+ * @returns {object} Object with content types and sorts
+ */
+source.getChannelCapabilities = () => {
+	return {
+		types: [Type.Feed.Mixed, Type.Feed.Playlists],
+		sorts: [Type.Order.Chronological]
+	};
+};
+
+/**
  * Gets channel content
  * @param {string} url Channel URL
+ * @param {string} type Content type
+ * @param {string} order Order
+ * @param {object} filters Filters
  * @returns {ContentPager} A pager for channel content
  */
-source.getChannelContents = function (url) {
+source.getChannelContents = function (url, type, order, filters) {
   const usernameMatch = url.match(REGEX.CHANNEL_URL);
 
   if (!usernameMatch || !usernameMatch[1]) {
@@ -291,25 +316,338 @@ source.getChannelContents = function (url) {
   // Extract username from channel URL using regex capture group
   const username = usernameMatch[1];
 
-  // First get the channel ID which is needed for pagination queries
-  const channelInfo = makeGraphQLRequest("ChannelInfoByUsername", {
-    "lookup": {
-      "username": username
+  // Handle different content type requests
+  if (type === Type.Feed.Playlists) {
+    // For playlists from a channel
+    return source.getChannelPlaylists(url);
+  } else {
+    // For video/mixed content
+    // First get the channel ID which is needed for pagination queries
+    const channelInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+      "lookup": {
+        "username": username
+      }
+    });
+
+    if (!channelInfo?.data?.user?.id) {
+      throw new UnavailableException("Channel not found");
     }
+
+    const initialData = [];
+
+    if (channelInfo?.data?.user?.liveStream?.streamStatus === 'LIVE') {
+      initialData.push(source.getContentDetails(createMixcloudUrl(username, null, true)));
+    }
+
+    // Return a pager that will load channel uploads with pagination
+    return new ChannelContentPager(channelInfo.data.user.id, username, initialData);
+  }
+};
+
+/**
+ * Gets channel playlists
+ * @param {string} url Channel URL
+ * @param {string} order Order
+ * @param {object} filters Filters
+ * @returns {PlaylistPager} A pager for channel playlists
+ */
+source.getChannelPlaylists = function (url) {
+  const usernameMatch = url.match(REGEX.CHANNEL_URL);
+
+  if (!usernameMatch || !usernameMatch[1]) {
+    throw new UnavailableException("Not able to access channel information");
+  }
+
+  const username = usernameMatch[1];
+  return new PlaylistsPager(username);
+};
+
+/**
+ * Checks if a URL is a playlist URL
+ * @param {string} url URL to check
+ * @returns {boolean} True if URL is a playlist URL
+ */
+source.isPlaylistUrl = function (url) {
+  return urlMatches(url, REGEX.PLAYLIST_URL) || urlMatches(url, REGEX.PLAYLISTS_URL) || urlMatches(url, REGEX.FAVORITES_URL) || urlMatches(url, REGEX.HISTORY_URL) || urlMatches(url, REGEX.REPOSTS_URL) || urlMatches(url, REGEX.TRACKS_URL);
+};
+
+/**
+ * Gets playlist contents
+ * @param {string} url Playlist URL
+ * @returns {ContentPager} A pager for playlist content
+ */
+function getPlaylistContents(url) {
+  // Check if it's a favorites URL
+  const favoritesMatch = url.match(REGEX.FAVORITES_URL);
+  
+  if (favoritesMatch && favoritesMatch[1]) {
+    const username = favoritesMatch[1];
+    return new FavoritesPager(username);
+  }
+  
+  // Check if it's a history URL
+  const historyMatch = url.match(REGEX.HISTORY_URL);
+  
+  if (historyMatch && historyMatch[1]) {
+    const username = historyMatch[1];
+    return new HistoryPager(username);
+  }
+  
+  // Check if it's a reposts URL
+  const repostsMatch = url.match(REGEX.REPOSTS_URL);
+  
+  if (repostsMatch && repostsMatch[1]) {
+    const username = repostsMatch[1];
+    return new RepostsPager(username);
+  }
+  
+  // Check if it's a channel playlists URL
+  const playlistsMatch = url.match(REGEX.PLAYLISTS_URL);
+  
+  if (playlistsMatch && playlistsMatch[1]) {
+    const username = playlistsMatch[1];
+    return new PlaylistsPager(username);
+  }
+  
+  // Check if it's a tracks URL
+  const tracksMatch = url.match(REGEX.TRACKS_URL);
+  
+  if (tracksMatch && tracksMatch[1]) {
+    const username = tracksMatch[1];
+    return new TracksPager(username);
+  }
+  
+  // Otherwise, it's a specific playlist
+  const match = url.match(REGEX.PLAYLIST_URL);
+  
+  if (!match || !match[1] || !match[2]) {
+    throw new UnavailableException("Invalid playlist URL");
+  }
+  
+  const username = match[1];
+  const playlistSlug = match[2];
+  
+  return new PlaylistContentPager(username, playlistSlug);
+}
+
+/**
+ * Gets playlist details
+ * @param {string} url Playlist URL
+ * @returns {PlatformPlaylistDetails} Playlist details
+ */
+source.getPlaylist = function (url) {
+  // Check if it's a favorites URL
+  const favoritesMatch = url.match(REGEX.FAVORITES_URL);
+  
+  if (favoritesMatch && favoritesMatch[1]) {
+    const username = favoritesMatch[1];
+    
+    // Get user info for favorites "playlist"
+    const userInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+      lookup: { username: username }
+    });
+    
+    if (!userInfo?.data?.user) {
+      throw new UnavailableException("User not found");
+    }
+    
+    const user = userInfo.data.user;
+    
+    // Use banner if available, otherwise use channel thumbnail
+    let playlistThumbnail = null;
+    if (user.coverPicture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.coverPicture.urlRoot, 1460, 370);
+    } else if (user.picture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.picture.urlRoot, 272, 272);
+    }
+    
+    return new PlatformPlaylistDetails({
+      id: new PlatformID(PLATFORM.name, `${username}_favorites`, config.id),
+      name: `${user.displayName}'s Favorites`,
+      url: url,
+      thumbnail: playlistThumbnail,
+      author: new PlatformAuthorLink(
+        new PlatformID(PLATFORM.name, user.id, config.id),
+        user.displayName,
+        createMixcloudUrl(username),
+        user.picture?.urlRoot ? createThumbnailUrl(user.picture.urlRoot, 272, 272) : null
+      ),
+      videoCount: -1,  // Unknown count for favorites
+      contents: getPlaylistContents(url)
+    });
+  }
+  
+  // Check if it's a history URL
+  const historyMatch = url.match(REGEX.HISTORY_URL);
+  
+  if (historyMatch && historyMatch[1]) {
+    const username = historyMatch[1];
+    
+    // Get user info for history "playlist"
+    const userInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+      lookup: { username: username }
+    });
+    
+    if (!userInfo?.data?.user) {
+      throw new UnavailableException("User not found");
+    }
+    
+    const user = userInfo.data.user;
+    
+    // Use banner if available, otherwise use channel thumbnail
+    let playlistThumbnail = null;
+    if (user.coverPicture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.coverPicture.urlRoot, 1460, 370);
+    } else if (user.picture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.picture.urlRoot, 272, 272);
+    }
+    
+    return new PlatformPlaylistDetails({
+      id: new PlatformID(PLATFORM.name, `${username}_history`, config.id),
+      name: `${user.displayName}'s Listening History`,
+      url: url,
+      thumbnail: playlistThumbnail,
+      author: new PlatformAuthorLink(
+        new PlatformID(PLATFORM.name, user.id, config.id),
+        user.displayName,
+        createMixcloudUrl(username),
+        user.picture?.urlRoot ? createThumbnailUrl(user.picture.urlRoot, 272, 272) : null
+      ),
+      videoCount: -1,  // Unknown count for history
+      contents: getPlaylistContents(url)
+    });
+  }
+  
+  // Check if it's a reposts URL
+  const repostsMatch = url.match(REGEX.REPOSTS_URL);
+  
+  if (repostsMatch && repostsMatch[1]) {
+    const username = repostsMatch[1];
+    
+    // Get user info for reposts "playlist"
+    const userInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+      lookup: { username: username }
+    });
+    
+    if (!userInfo?.data?.user) {
+      throw new UnavailableException("User not found");
+    }
+    
+    const user = userInfo.data.user;
+    
+    // Use banner if available, otherwise use channel thumbnail
+    let playlistThumbnail = null;
+    if (user.coverPicture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.coverPicture.urlRoot, 1460, 370);
+    } else if (user.picture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.picture.urlRoot, 272, 272);
+    }
+    
+    return new PlatformPlaylistDetails({
+      id: new PlatformID(PLATFORM.name, `${username}_reposts`, config.id),
+      name: `${user.displayName}'s Reposts`,
+      url: url,
+      thumbnail: playlistThumbnail,
+      author: new PlatformAuthorLink(
+        new PlatformID(PLATFORM.name, user.id, config.id),
+        user.displayName,
+        createMixcloudUrl(username),
+        user.picture?.urlRoot ? createThumbnailUrl(user.picture.urlRoot, 272, 272) : null
+      ),
+      videoCount: -1,  // Unknown count for reposts
+      contents: getPlaylistContents(url)
+    });
+  }
+  
+  // Check if it's a tracks URL
+  const tracksMatch = url.match(REGEX.TRACKS_URL);
+  
+  if (tracksMatch && tracksMatch[1]) {
+    const username = tracksMatch[1];
+    
+    // Get user info for tracks "playlist"
+    const userInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+      lookup: { username: username }
+    });
+    
+    if (!userInfo?.data?.user) {
+      throw new UnavailableException("User not found");
+    }
+    
+    const user = userInfo.data.user;
+    
+    // Use banner if available, otherwise use channel thumbnail
+    let playlistThumbnail = null;
+    if (user.coverPicture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.coverPicture.urlRoot, 1460, 370);
+    } else if (user.picture?.urlRoot) {
+      playlistThumbnail = createThumbnailUrl(user.picture.urlRoot, 272, 272);
+    }
+    
+    return new PlatformPlaylistDetails({
+      id: new PlatformID(PLATFORM.name, `${username}_tracks`, config.id),
+      name: `${user.displayName}'s Tracks`,
+      url: url,
+      thumbnail: playlistThumbnail,
+      author: new PlatformAuthorLink(
+        new PlatformID(PLATFORM.name, user.id, config.id),
+        user.displayName,
+        createMixcloudUrl(username),
+        user.picture?.urlRoot ? createThumbnailUrl(user.picture.urlRoot, 272, 272) : null
+      ),
+      videoCount: -1,  // Unknown count for tracks
+      contents: getPlaylistContents(url)
+    });
+  }
+  
+  // Check if it's a channel playlists URL
+  const playlistsMatch = url.match(REGEX.PLAYLISTS_URL);
+  
+  if (playlistsMatch && playlistsMatch[1]) {
+    throw new UnavailableException("Cannot get details for playlists listing page");
+  }
+  
+  // Otherwise, it's a specific playlist
+  const match = url.match(REGEX.PLAYLIST_URL);
+  
+  if (!match || !match[1] || !match[2]) {
+    throw new UnavailableException("Invalid playlist URL");
+  }
+  
+  const username = match[1];
+  const playlistSlug = match[2];
+  
+  // Fetch playlist details
+  const playlistInfo = makeGraphQLRequest("PlaylistDetailsQuery", {
+    lookup: {
+      username: username,
+      slug: playlistSlug
+    }
+  }, "PlaylistDetailsQuery");
+  
+  if (!playlistInfo?.data?.playlist) {
+    logError(`PlaylistDetailsQuery failed. Response: ${JSON.stringify(playlistInfo)}`);
+    throw new UnavailableException("Playlist not found");
+  }
+  
+  const playlist = playlistInfo.data.playlist;
+  const owner = playlist.owner || { username: username, displayName: username };
+  
+  return new PlatformPlaylistDetails({
+    id: new PlatformID(PLATFORM.name, playlist.id, config.id),
+    name: playlist.name,
+    url: url,
+    thumbnail: playlist.picture?.urlRoot ? 
+      createThumbnailUrl(playlist.picture.urlRoot, 272, 272) : null,
+    author: new PlatformAuthorLink(
+      new PlatformID(PLATFORM.name, owner.id || username, config.id),
+      owner.displayName || username,
+      createMixcloudUrl(owner.username || username),
+      owner.picture?.urlRoot ? createThumbnailUrl(owner.picture.urlRoot, 272, 272) : null
+    ),
+    videoCount: playlist.items?.totalCount || 0,
+    contents: getPlaylistContents(url)
   });
-
-  if (!channelInfo?.data?.user?.id) {
-    throw new UnavailableException("Channel not found");
-  }
-
-  const initialData = [];
-
-  if (channelInfo?.data?.user?.liveStream?.streamStatus === 'LIVE') {
-    initialData.push(source.getContentDetails(createMixcloudUrl(username, null, true)));
-  }
-
-  // Return a pager that will load channel uploads with pagination
-  return new ChannelContentPager(channelInfo.data.user.id, username, initialData);
 };
 
 /**
@@ -468,7 +806,7 @@ function getContentDetailsLiveStream(url) {
 
   const platformVideo = liveStreamToPlatformVideo(liveStream);
 
-  return new PlatformVideoDetails({
+  const platformVideoDetails = new PlatformVideoDetails({
     id: platformVideo.id,
     name: platformVideo.name,
     description: platformVideo.description,
@@ -480,6 +818,25 @@ function getContentDetailsLiveStream(url) {
     video: new VideoSourceDescriptor(sources),
     isLive: true,
   });
+
+  // Add recommendations getter that fetches channel videos
+  platformVideoDetails.getContentRecommendations = function () {
+    // Get channel info to get the channel ID
+    const channelInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+      "lookup": {
+        "username": username
+      }
+    });
+
+    if (!channelInfo?.data?.user?.id) {
+      return new ContentPager([], false);
+    }
+
+    // Return a pager without the live stream in initialData (empty array instead)
+    return new ChannelContentPager(channelInfo.data.user.id, username, []);
+  };
+
+  return platformVideoDetails;
 }
 
 // ====================== CONTENT CONVERSION HELPERS ======================
@@ -528,7 +885,6 @@ function cloudcastToPlatformVideo(cloudcast) {
     viewCount: cloudcast.plays || 0,
     url: contentUrl,
     uploadDate: publishDate,
-    description: description,
     isLive: false
   });
 }
@@ -549,9 +905,6 @@ function liveStreamToPlatformVideo(stream) {
     createThumbnailUrl(stream.owner.picture.urlRoot, 272, 272) :
     '';
 
-  // Extract tags from the stream
-  const tags = extractTags(stream.tagList);
-
   const contentUrl = createMixcloudUrl(stream.owner.username, null, true);
 
   return new PlatformVideo({
@@ -568,7 +921,6 @@ function liveStreamToPlatformVideo(stream) {
     viewCount: stream.plays,
     uploadDate: parseInt(new Date().getTime() / 1000),
     isLive: true,
-    description: tags.length ? tags.join(", ") : "",
     url: contentUrl
   });
 }
@@ -594,6 +946,7 @@ function makeGraphQLRequest(queryName, variables, operationName) {
     }
 
     const queryInfo = {
+      id: operationName,
       query: GQL_QUERIES[queryName],
       operationName: operationName,
       variables: variables
@@ -730,11 +1083,11 @@ function makeRequestWithRetry(method, url, body = null, headers = {}, options = 
  */
 function createMixcloudUrl(username, slug, isLive = false) {
   if (isLive) {
-    return `https://www.mixcloud.com/live/${username}/`;
+    return `https://www.mixcloud.com/live/${username}`;
   } else if (slug) {
-    return `https://www.mixcloud.com/${username}/${slug}/`;
+    return `https://www.mixcloud.com/${username}/${slug}`;
   } else {
-    return `https://www.mixcloud.com/${username}/`;
+    return `https://www.mixcloud.com/${username}`;
   }
 }
 
@@ -1326,9 +1679,620 @@ class MixcloudCommentPager extends CommentPager {
   }
 }
 
+/**
+ * Custom pager implementation for user playlists
+ */
+class PlaylistsPager extends ContentPager {
+  constructor(username) {
+    super([], true);
+    this.username = username;
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const playlists = [];
+      
+      // Only fetch on first page
+      if (!this.cursor) {
+        // Get user info for thumbnails, author, and navigation items
+        const userInfo = makeGraphQLRequest("ChannelInfoByUsername", {
+          lookup: { username: this.username }
+        });
+        
+        let playlistThumbnail = null;
+        let author = null;
+        
+        if (userInfo?.data?.user) {
+          const user = userInfo.data.user;
+          // Use banner if available, otherwise use channel thumbnail
+          if (user.coverPicture?.urlRoot) {
+            playlistThumbnail = createThumbnailUrl(user.coverPicture.urlRoot, 1460, 370);
+          } else if (user.picture?.urlRoot) {
+            playlistThumbnail = createThumbnailUrl(user.picture.urlRoot, 272, 272);
+          }
+          
+          // Create author information
+          author = new PlatformAuthorLink(
+            new PlatformID(PLATFORM.name, user.id, config.id),
+            user.displayName,
+            createMixcloudUrl(this.username),
+            user.picture?.urlRoot ? createThumbnailUrl(user.picture.urlRoot, 272, 272) : null
+          );
+          
+          // Add channel playlists from profileNavigation
+          if (user.profileNavigation?.menuItems) {
+            user.profileNavigation.menuItems.forEach(item => {
+              if (item.__typename === 'PlaylistNavigationItem' && item.playlist) {
+                playlists.push(new PlatformPlaylist({
+                  id: new PlatformID(PLATFORM.name, item.playlist.id, config.id),
+                  name: item.playlist.name,
+                  url: `https://www.mixcloud.com/${this.username}/playlists/${item.playlist.slug}/`,
+                  thumbnail: playlistThumbnail,
+                  author: author,
+                  videoCount: item.count || 0
+                }));
+              }
+            });
+          }
+        }
+        
+        // Add special playlists at the beginning
+        playlists.unshift(new PlatformPlaylist({
+          id: new PlatformID(PLATFORM.name, `${this.username}_tracks`, config.id),
+          name: "Tracks",
+          url: createMixcloudUrl(`${this.username}/tracks`),
+          thumbnail: playlistThumbnail,
+          author: author,
+          videoCount: -1  // Unknown count
+        }));
+        
+        playlists.unshift(new PlatformPlaylist({
+          id: new PlatformID(PLATFORM.name, `${this.username}_reposts`, config.id),
+          name: "Reposts",
+          url: createMixcloudUrl(`${this.username}/reposts`),
+          thumbnail: playlistThumbnail,
+          author: author,
+          videoCount: -1  // Unknown count
+        }));
+        
+        playlists.unshift(new PlatformPlaylist({
+          id: new PlatformID(PLATFORM.name, `${this.username}_history`, config.id),
+          name: "Listening History",
+          url: createMixcloudUrl(`${this.username}/listens`),
+          thumbnail: playlistThumbnail,
+          author: author,
+          videoCount: -1  // Unknown count
+        }));
+        
+        playlists.unshift(new PlatformPlaylist({
+          id: new PlatformID(PLATFORM.name, `${this.username}_favorites`, config.id),
+          name: "Favorites",
+          url: createMixcloudUrl(`${this.username}/favorites`),
+          thumbnail: playlistThumbnail,
+          author: author,
+          videoCount: -1  // Unknown count
+        }));
+      }
+
+      // Since we're now getting playlists from profileNavigation, we don't need pagination
+      if (!this.cursor) {
+        this.hasMore = false;
+      }
+
+      this.results = playlists;
+      return this;
+    } catch (error) {
+      logError(`Exception in PlaylistsPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+/**
+ * Custom pager implementation for playlist contents
+ */
+class PlaylistContentPager extends ContentPager {
+  constructor(username, playlistSlug) {
+    super([], true);
+    this.username = username;
+    this.playlistSlug = playlistSlug;
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const variables = {
+        lookup: {
+          username: this.username,
+          slug: this.playlistSlug
+        },
+        count: 20,
+        cursor: this.cursor
+      };
+
+      const response = makeGraphQLRequest("PlaylistContentsQuery", variables);
+
+      if (!response?.data?.playlist?.items?.edges?.length) {
+        this.hasMore = false;
+        return this;
+      }
+
+      const pageInfo = response.data.playlist.items.pageInfo;
+      this.hasMore = pageInfo.hasNextPage;
+      this.cursor = pageInfo.endCursor;
+
+      const videos = response.data.playlist.items.edges
+        .filter(edge => edge.node.cloudcast && edge.node.cloudcast.isPlayable)
+        .map(edge => cloudcastToPlatformVideo(edge.node.cloudcast));
+
+      this.results = videos;
+      return this;
+    } catch (error) {
+      logError(`Exception in PlaylistContentPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+/**
+ * Custom pager implementation for user favorites
+ */
+class FavoritesPager extends ContentPager {
+  constructor(username) {
+    super([], true);
+    this.username = username;
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const variables = {
+        lookup: { username: this.username },
+        count: 20,
+        cursor: this.cursor
+      };
+
+      const response = makeGraphQLRequest("UserFavoritesQuery", variables);
+
+      if (!response?.data?.user?.favorites?.edges?.length) {
+        this.hasMore = false;
+        return this;
+      }
+
+      const pageInfo = response.data.user.favorites.pageInfo;
+      this.hasMore = pageInfo.hasNextPage;
+      this.cursor = pageInfo.endCursor;
+
+      const videos = response.data.user.favorites.edges
+        .filter(edge => edge.node.isPlayable)
+        .map(edge => cloudcastToPlatformVideo(edge.node));
+
+      this.results = videos;
+      return this;
+    } catch (error) {
+      logError(`Exception in FavoritesPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+/**
+ * Custom pager implementation for user listening history
+ */
+class HistoryPager extends ContentPager {
+  constructor(username) {
+    super([], true);
+    this.username = username;
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const variables = {
+        lookup: { username: this.username },
+        count: 20,
+        cursor: this.cursor
+      };
+
+      const response = makeGraphQLRequest("UserListeningHistoryQuery", variables);
+
+      if (!response?.data?.user?.listeningHistory?.edges?.length) {
+        this.hasMore = false;
+        return this;
+      }
+
+      const pageInfo = response.data.user.listeningHistory.pageInfo;
+      this.hasMore = pageInfo.hasNextPage;
+      this.cursor = pageInfo.endCursor;
+
+      const videos = response.data.user.listeningHistory.edges
+        .filter(edge => edge.node.cloudcast && edge.node.cloudcast.isPlayable)
+        .map(edge => cloudcastToPlatformVideo(edge.node.cloudcast));
+
+      this.results = videos;
+      return this;
+    } catch (error) {
+      logError(`Exception in HistoryPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+/**
+ * Custom pager implementation for user reposts
+ */
+class RepostsPager extends ContentPager {
+  constructor(username) {
+    super([], true);
+    this.username = username;
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const variables = {
+        lookup: { username: this.username },
+        count: 20,
+        cursor: this.cursor
+      };
+
+      const response = makeGraphQLRequest("UserRepostsQuery", variables);
+
+      if (!response?.data?.user?.reposted?.edges?.length) {
+        this.hasMore = false;
+        return this;
+      }
+
+      const pageInfo = response.data.user.reposted.pageInfo;
+      this.hasMore = pageInfo.hasNextPage;
+      this.cursor = pageInfo.endCursor;
+
+      const videos = response.data.user.reposted.edges
+        .filter(edge => edge.node.isPlayable)
+        .map(edge => cloudcastToPlatformVideo(edge.node));
+
+      this.results = videos;
+      return this;
+    } catch (error) {
+      logError(`Exception in RepostsPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+/**
+ * Custom pager implementation for user tracks
+ */
+class TracksPager extends ContentPager {
+  constructor(username) {
+    super([], true);
+    this.username = username;
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const variables = {
+        lookup: { username: this.username },
+        count: 20,
+        cursor: this.cursor
+      };
+
+      const response = makeGraphQLRequest("UserTracksQuery", variables);
+
+      if (!response?.data?.user?.uploads?.edges?.length) {
+        this.hasMore = false;
+        return this;
+      }
+
+      const pageInfo = response.data.user.uploads.pageInfo;
+      this.hasMore = pageInfo.hasNextPage;
+      this.cursor = pageInfo.endCursor;
+
+      const videos = response.data.user.uploads.edges
+        .filter(edge => edge.node.isPlayable)
+        .map(edge => cloudcastToPlatformVideo(edge.node));
+
+      this.results = videos;
+      return this;
+    } catch (error) {
+      logError(`Exception in TracksPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+
+
 // ====================== GRAPHQL QUERIES ======================
 
 const GQL_QUERIES = {
+  PlaylistContentsQuery: `
+query PlaylistContentsQuery(
+  $lookup: PlaylistLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  playlist: playlistLookup(lookup: $lookup) {
+    id
+    name
+    description
+    items(first: $count, after: $cursor) {
+      edges {
+        node {
+          cloudcast {
+            id
+            name
+            slug
+            url
+            publishDate
+            audioLength
+            plays
+            owner {
+              id
+              username
+              displayName
+              picture {
+                urlRoot
+              }
+            }
+            picture {
+              urlRoot
+            }
+            isExclusive
+            isExclusivePreviewOnly
+            isPlayable
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`,
+  PlaylistDetailsQuery: `
+query PlaylistDetailsQuery(
+  $lookup: PlaylistLookup!
+) {
+  playlist: playlistLookup(lookup: $lookup) {
+    id
+    name
+    description
+    items {
+      totalCount
+    }
+    picture {
+      urlRoot
+    }
+    owner {
+      id
+      username
+      displayName
+      picture {
+        urlRoot
+      }
+    }
+  }
+  viewer {
+    id
+  }
+}`,
+  UserFavoritesQuery: `
+query UserFavoritesQuery(
+  $lookup: UserLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  user: userLookup(lookup: $lookup) {
+    id
+    displayName
+    favorites(first: $count, after: $cursor) {
+      edges {
+        node {
+          id
+          name
+          slug
+          url
+          publishDate
+          audioLength
+          plays
+          owner {
+            id
+            username
+            displayName
+            picture {
+              urlRoot
+            }
+          }
+          picture {
+            urlRoot
+          }
+          isExclusive
+          isExclusivePreviewOnly
+          isPlayable
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`,
+  UserListeningHistoryQuery: `
+query UserListeningHistoryQuery(
+  $lookup: UserLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  user: userLookup(lookup: $lookup) {
+    id
+    displayName
+    listeningHistory(first: $count, after: $cursor) {
+      edges {
+        node {
+          id
+          cloudcast {
+            id
+            name
+            slug
+            url
+            publishDate
+            audioLength
+            plays
+            owner {
+              id
+              username
+              displayName
+              picture {
+                urlRoot
+              }
+            }
+            picture {
+              urlRoot
+            }
+            isExclusive
+            isExclusivePreviewOnly
+            isPlayable
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`,
+  UserRepostsQuery: `
+query UserRepostsQuery(
+  $lookup: UserLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  user: userLookup(lookup: $lookup) {
+    id
+    displayName
+    reposted(first: $count, after: $cursor, audioTypes: [SHOW, TRACK]) {
+      edges {
+        node {
+          id
+          name
+          slug
+          url
+          publishDate
+          audioLength
+          plays
+          owner {
+            id
+            username
+            displayName
+            picture {
+              urlRoot
+            }
+          }
+          picture {
+            urlRoot
+          }
+          isExclusive
+          isExclusivePreviewOnly
+          isPlayable
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`,
+  UserTracksQuery: `
+query UserTracksQuery(
+  $lookup: UserLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  user: userLookup(lookup: $lookup) {
+    id
+    displayName
+    uploads(first: $count, after: $cursor, audioTypes: [TRACK], isPublic: true) {
+      edges {
+        node {
+          id
+          name
+          slug
+          url
+          publishDate
+          audioLength
+          plays
+          owner {
+            id
+            username
+            displayName
+            picture {
+              urlRoot
+            }
+          }
+          picture {
+            urlRoot
+          }
+          isExclusive
+          isExclusivePreviewOnly
+          isPlayable
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`,
   MobileLiveStreamContainerQuery: `
 query MobileLiveStreamContainerQuery($lookup: UserLookup!) {
 	viewer {
@@ -2732,6 +3696,19 @@ query ChannelInfoByUsername($lookup: UserLookup!) {
 		}
 		followers {
 			totalCount
+		}
+		profileNavigation {
+			menuItems {
+				__typename
+				... on PlaylistNavigationItem {
+					playlist {
+						id
+						name
+						slug
+					}
+					count
+				}
+			}
 		}
 	}
 }
