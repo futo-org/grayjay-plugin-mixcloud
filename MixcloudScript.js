@@ -106,7 +106,7 @@ const RESERVED_URL_LIST = [
 ]
 
 // Plugin configuration storage
-let config;
+let config = {};
 
 source.enable = function (conf, settings, saveStateStr) {
   config = conf ?? {};
@@ -677,6 +677,35 @@ source.getComments = function (url) {
   return new MixcloudCommentPager(url);
 }
 
+// ====================== DECRYPTION FUNCTIONS ======================
+
+/**
+ * Decrypts Mixcloud audio URLs using XOR cipher
+ * @param {string} encryptedUrl Base64 encoded encrypted URL
+ * @returns {string} Decrypted URL
+ */
+function decryptMixcloudUrl(encryptedUrl) {
+  const key = 'IFYOUWANTTHEARTISTSTOGETPAIDDONOTDOWNLOADFROMMIXCLOUD';
+  
+  try {
+    // Decode base64
+    const ciphertext = atob(encryptedUrl);
+    
+    // XOR decrypt
+    let decrypted = '';
+    for (let i = 0; i < ciphertext.length; i++) {
+      const ch = ciphertext.charCodeAt(i);
+      const k = key.charCodeAt(i % key.length);
+      decrypted += String.fromCharCode(ch ^ k);
+    }
+    
+    return decrypted;
+  } catch (e) {
+    log(`Failed to decrypt URL: ${e.message}`);
+    return null;
+  }
+}
+
 // ====================== CONTENT DETAILS FUNCTIONS ======================
 
 /**
@@ -701,7 +730,6 @@ function getContentDetailsCloudcast(url) {
       "slug": slug
     }
   });
-
   if (!cloudcastInfo?.data?.cloudcast) {
     throw new UnavailableException("Cloudcast not found");
   }
@@ -710,7 +738,69 @@ function getContentDetailsCloudcast(url) {
 
   const sources = [];
 
-  if (cloudcast?.streamInfo?.hlsDrmUrl) {
+  if (cloudcast?.streamInfo?.hlsUrl) {
+
+    let hlsUrl;
+
+    if (isValidURL(cloudcast?.streamInfo?.hlsUrl)) {
+      hlsUrl = cloudcast?.streamInfo?.hlsUrl;
+    } else {
+
+      const decryptedUrl = decryptMixcloudUrl(cloudcast?.streamInfo?.hlsUrl);
+
+      if (decryptedUrl) {
+        hlsUrl = decryptedUrl;
+      }
+
+    }
+
+    if (hlsUrl) {
+      sources.push(new HLSSource({
+        name: "HLS",
+        url: hlsUrl,
+        duration: cloudcast.audioLength,
+        language: "Unknown",
+      }));
+    }
+
+  }
+  else if (cloudcast?.streamInfo?.url) {
+    log(`Attempting to decrypt URL: ${cloudcast.streamInfo.url}`);
+    const decryptedUrl = decryptMixcloudUrl(cloudcast.streamInfo.url);
+    
+    if (decryptedUrl) {
+      log(`Decrypted URL: ${decryptedUrl}`);
+      // Determine format from decrypted URL
+      if (decryptedUrl.includes('.m4a') || decryptedUrl.includes('.mp4')) {
+        sources.push(new AudioUrlSource({
+          name: "Audio",
+          url: decryptedUrl,
+          bitrate: 128000,
+          container: "m4a",
+          duration: cloudcast.audioLength
+        }));
+      } else if (decryptedUrl.includes('.mp3')) {
+        sources.push(new AudioUrlSource({
+          name: "Audio",
+          url: decryptedUrl,
+          bitrate: 128000,
+          container: "mp3",
+          duration: cloudcast.audioLength
+        }));
+      } else {
+        // Try as m4a by default if no extension detected
+        sources.push(new AudioUrlSource({
+          name: "Audio",
+          url: decryptedUrl,
+          bitrate: 128000,
+          container: "m4a",
+          duration: cloudcast.audioLength
+        }));
+      }
+    }
+  }
+  // Fallback to HLS DRM URL
+  else if (cloudcast?.streamInfo?.hlsDrmUrl) {
     const playlistUrl = cloudcast.streamInfo.hlsDrmUrl.replace("hls_drm/", "hls/");
 
     sources.push(new HLSSource({
@@ -1073,6 +1163,19 @@ function makeRequestWithRetry(method, url, body = null, headers = {}, options = 
 }
 
 // ====================== UTILITY FUNCTIONS ======================
+
+/**
+ * Checks if a string is a valid URL
+ * @param {string} str The string to validate
+ * @returns {boolean} True if the string is a valid URL, false otherwise
+ */
+function isValidURL(str) {
+  try {
+    return url?.startsWith('https://');
+  } catch (_) {
+    return false;
+  }
+}
 
 /**
  * Creates a Mixcloud URL for a channel, mix, or live stream

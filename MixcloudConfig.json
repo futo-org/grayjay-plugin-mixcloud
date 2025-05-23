@@ -26,7 +26,8 @@
       "Improvement: Add channel platform playlists (History, Favorites, Reposts, Tracks);",
       "Improvement: Add channel custom playlists;",
       "Improvement: Improve plugin's logo resolution;",
-      "Improvement: Use channel videos as recommendations for livestreams;"
+      "Improvement: Use channel videos as recommendations for livestreams;",
+      "Improvement: Support encrypted sources;"
     ]
   }
 }
