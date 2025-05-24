@@ -738,6 +738,8 @@ function getContentDetailsCloudcast(url) {
 
   const sources = [];
 
+  const isPreview = cloudcast.isExclusive && cloudcast.previewUrl;
+
   if (cloudcast?.streamInfo?.hlsUrl) {
 
     let hlsUrl;
@@ -810,12 +812,23 @@ function getContentDetailsCloudcast(url) {
       language: "Unknown",
     }));
   }
+  else if (isPreview) {
+    sources.push(new AudioUrlSource({
+      name: "Audio",
+      url: cloudcast.previewUrl,
+      container: "mp3",
+      duration: -1
+    }));
+  }
 
   if (!sources.length) {
     throw new UnavailableException("No sources available for cloudcast");
   }
 
   const platformVideo = cloudcastToPlatformVideo(cloudcast);
+
+  // Extract tags from the cloudcast
+  // const tags = extractTags(cloudcastInfo?.data?.cloudcast?.tagList);
 
   const platformVideoDetails = new PlatformVideoDetails({
     id: platformVideo.id,
@@ -849,6 +862,10 @@ function getContentDetailsCloudcast(url) {
 
     return new ContentPager(contentList, false);
   };
+
+  if(isPreview) {
+    bridge.toast('Preview - Subscribe to the artist to access the full content.')
+  }
 
   return platformVideoDetails;
 }
@@ -943,9 +960,6 @@ function cloudcastToPlatformVideo(cloudcast) {
     createThumbnailUrl(cloudcast.picture.urlRoot, 600, 600) :
     '';
 
-  // Extract tags from the cloudcast
-  const tags = extractTags(cloudcast.tagList);
-
   // Format publish date
   const publishDate = cloudcast.publishDate ? dateToUnixSeconds(cloudcast.publishDate) : null;
 
@@ -953,17 +967,25 @@ function cloudcastToPlatformVideo(cloudcast) {
     createThumbnailUrl(cloudcast.owner.picture.urlRoot, 272, 272) :
     '';
 
-  const description = cloudcast.description || (tags.length ? tags.join(", ") : "");
-
   // Use channel username if provided (for channel content)
   // This handles cases where the content URL uses a different username than the owner
   const urlUsername = cloudcast._channelUsername || cloudcast.owner.username;
 
   const contentUrl = cloudcast.url || createMixcloudUrl(urlUsername, cloudcast.slug);
 
+  const isPreview = cloudcast.isExclusive && cloudcast.previewUrl;
+
+  let name = cloudcast.name;
+  let duration = cloudcast.audioLength || 0;
+
+  if(isPreview) {
+    name = '(preview) ' + name
+    duration = 20;
+  }
+
   return new PlatformVideo({
     id: new PlatformID(PLATFORM.name, cloudcast.id, config.id),
-    name: cloudcast.name,
+    name,
     thumbnails: new Thumbnails([new Thumbnail(thumbnailUrl)]),
     author: new PlatformAuthorLink(
       new PlatformID(PLATFORM.name, cloudcast.owner.id, config.id),
@@ -971,7 +993,7 @@ function cloudcastToPlatformVideo(cloudcast) {
       createMixcloudUrl(cloudcast.owner.username),
       authorThumbnailUrl || thumbnailUrl  // Use author thumbnail if available, otherwise use content thumbnail
     ),
-    duration: cloudcast.audioLength || 0,
+    duration,
     viewCount: cloudcast.plays || 0,
     url: contentUrl,
     uploadDate: publishDate,
@@ -3825,10 +3847,12 @@ query CloudcastLookup($lookup: CloudcastLookup!) {
 		slug
 		isUnlisted
 		isShortLength
+    isExclusive
 		audioType
 		audioLength
 		description
 		url
+    previewUrl
     plays
     publishDate
 		streamInfo(timestamper: false) {

@@ -40,7 +40,8 @@
       "Improvement: Support encrypted sources;"
     ],
     "3": [
-      "Fix: Add live and upload content description;"
+      "Fix: Add live and upload content description;",
+      "Fix: Play preview uploads;"
     ]
   }
 }
