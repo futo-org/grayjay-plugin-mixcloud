@@ -22,6 +22,16 @@
     ".mixcloud.stream"
   ],
   "changelog": {
+    "1": [
+      "Home with live streams;",
+      "Search shows;",
+      "Search creators;",
+      "Creator details with live streams and audio content;",
+      "Audio streams;",
+      "Comments;",
+      "Live chat;",
+      "Content recommendation;"
+    ],
     "2": [
       "Improvement: Add channel platform playlists (History, Favorites, Reposts, Tracks);",
       "Improvement: Add channel custom playlists;",
