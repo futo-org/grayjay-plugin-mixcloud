@@ -108,8 +108,35 @@ const RESERVED_URL_LIST = [
 // Plugin configuration storage
 let config = {};
 
+let state = {
+  hasPremiumFeatures: false,
+  hasProFeatures: false
+};
+
 source.enable = function (conf, settings, saveStateStr) {
   config = conf ?? {};
+
+  if (saveStateStr) {
+    state = JSON.parse(saveStateStr);
+  }
+  else {
+    if (bridge.isLoggedIn()) {
+      
+      const useAuth = true;
+      const cloudcastInfo = makeGraphQLRequest("getViewerDataQuery", {}, null, useAuth);
+
+      if (cloudcastInfo?.data?.viewer?.me) {
+        state.hasPremiumFeatures = cloudcastInfo?.data?.viewer?.me?.hasPremiumFeatures ?? false;
+        state.hasProFeatures = cloudcastInfo?.data?.viewer?.me?.hasProFeatures ?? false;
+      }
+    }
+  }
+
+};
+
+
+source.saveState = () => {
+    return JSON.stringify(state);
 };
 
 // ====================== PLUGIN ENTRY POINTS ======================
@@ -1046,7 +1073,7 @@ function liveStreamToPlatformVideo(stream) {
  * @param {string} operationName Operation name for the GraphQL request
  * @returns {Object|null} Response body or null on error
  */
-function makeGraphQLRequest(queryName, variables, operationName) {
+function makeGraphQLRequest(queryName, variables, operationName, useAuth = false) {
   try {
     if (!GQL_QUERIES[queryName]) {
       logError(`Unknown GraphQL query: ${queryName}`);
@@ -1064,7 +1091,7 @@ function makeGraphQLRequest(queryName, variables, operationName) {
       variables: variables
     };
 
-    const response = makeRequestWithRetry('POST', URLS.GRAPHQL_URL, JSON.stringify(queryInfo), DEFAULT_REST_HEADERS, { parseResponse: true });
+    const response = makeRequestWithRetry('POST', URLS.GRAPHQL_URL, JSON.stringify(queryInfo), DEFAULT_REST_HEADERS, { parseResponse: true, useAuth: useAuth });
 
     if (!response.isOk) {
       logError(`GraphQL request failed. Query: ${queryName}, Status: ${response.code}`);
@@ -4656,5 +4683,24 @@ fragment usePlayWithRestrictions_cloudcast on Cloudcast {
   ...useExclusiveCloudcastModal_cloudcast
 }
 
+`,
+getViewerDataQuery: `
+query getViewerDataQuery {
+  viewer {
+    me {
+      id
+      email
+      username
+      hasProFeatures
+      hasPremiumFeatures
+      isSelfDeclaredCreator
+      isStaff
+      isUploader
+    }
+    id
+  }
+}
+
 `
+
 };
