@@ -820,7 +820,7 @@ function getContentDetailsCloudcast(url) {
   const platformVideoDetails = new PlatformVideoDetails({
     id: platformVideo.id,
     name: platformVideo.name,
-    description: platformVideo.description,
+    description: cloudcast.description,
     author: platformVideo.author,
     url: platformVideo.url,
     duration: platformVideo.duration,
@@ -899,7 +899,7 @@ function getContentDetailsLiveStream(url) {
   const platformVideoDetails = new PlatformVideoDetails({
     id: platformVideo.id,
     name: platformVideo.name,
-    description: platformVideo.description,
+    description: liveStream.description,
     author: platformVideo.author,
     url: platformVideo.url,
     viewCount: platformVideo.viewCount,

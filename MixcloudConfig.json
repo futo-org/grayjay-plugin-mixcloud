@@ -38,6 +38,9 @@
       "Improvement: Improve plugin's logo resolution;",
       "Improvement: Use channel videos as recommendations for livestreams;",
       "Improvement: Support encrypted sources;"
+    ],
+    "3": [
+      "Fix: Add live and upload content description;"
     ]
   }
 }
