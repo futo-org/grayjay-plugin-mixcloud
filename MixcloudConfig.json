@@ -8,7 +8,7 @@
   "scriptUrl": "./MixcloudScript.js",
   "iconUrl": "./MixcloudIcon.png",
   "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
-  "version": 1,
+  "version": 2,
   "id": "84331338-b045-419c-88e4-c86036f4cbf5",
   "scriptSignature": "",
   "scriptPublicKey": "",
@@ -20,5 +20,14 @@
   "allowUrls": [
     ".mixcloud.com",
     ".mixcloud.stream"
-  ]
+  ],
+  "changelog": {
+    "2": [
+      "Improvement: Add channel platform playlists (History, Favorites, Reposts, Tracks);",
+      "Improvement: Add channel custom playlists;",
+      "Improvement: Improve plugin's logo resolution;",
+      "Improvement: Use channel videos as recommendations for livestreams;",
+      "Improvement: Support encrypted sources;"
+    ]
+  }
 }
