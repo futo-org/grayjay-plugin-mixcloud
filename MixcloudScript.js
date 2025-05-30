@@ -1029,6 +1029,7 @@ function getContentDetailsCloudcast(url) {
     duration: platformVideo.duration,
     thumbnails: platformVideo.thumbnails,
     viewCount: platformVideo.viewCount,
+    datetime: platformVideo.datetime,
     video: new UnMuxVideoSourceDescriptor([], sources),
     isLive: false,
   });
@@ -1112,6 +1113,7 @@ function getContentDetailsLiveStream(url) {
     viewCount: platformVideo.viewCount,
     thumbnails: platformVideo.thumbnails,
     duration: 0,
+    datetime: platformVideo.datetime,
     video: new VideoSourceDescriptor(sources),
     isLive: true,
   });
@@ -1150,8 +1152,8 @@ function cloudcastToPlatformVideo(cloudcast) {
     createThumbnailUrl(cloudcast.picture.urlRoot, 600, 600) :
     '';
 
-  // Format publish date
-  const publishDate = cloudcast.publishDate ? dateToUnixSeconds(cloudcast.publishDate) : null;
+  // Format publish date - return 0 if no date available
+  const publishDate = cloudcast.publishDate ? dateToUnixSeconds(cloudcast.publishDate) : 0;
 
   const authorThumbnailUrl = cloudcast.owner.picture?.urlRoot ?
     createThumbnailUrl(cloudcast.owner.picture.urlRoot, 272, 272) :
