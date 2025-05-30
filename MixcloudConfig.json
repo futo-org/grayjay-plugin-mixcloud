@@ -52,7 +52,10 @@
     "3": [
       "Improvement: Add login support;",
       "Fix: Add live and upload content description;",
-      "Fix: Play preview uploads;"
+      "Fix: Play preview uploads;",
+      "Improvement: Sign-in support;",
+      "Improvement: Import user playlists;",
+      "Improvement: Import user subscriptions;"
     ]
   }
 }
