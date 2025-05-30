@@ -1114,7 +1114,6 @@ function getContentDetailsLiveStream(url) {
     viewCount: platformVideo.viewCount,
     thumbnails: platformVideo.thumbnails,
     duration: 0,
-    datetime: platformVideo.datetime,
     video: new VideoSourceDescriptor(sources),
     isLive: true,
   });

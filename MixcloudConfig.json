@@ -13,8 +13,7 @@
   "scriptSignature": "",
   "scriptPublicKey": "",
   "packages": [
-    "Http",
-    "Utilities"
+    "Http"
   ],
   "allowEval": false,
   "allowUrls": [
@@ -51,12 +50,11 @@
     ],
     "3": [
       "Improvement: Add login support;",
-      "Fix: Add live and upload content description;",
-      "Fix: Play preview uploads;",
-      "Improvement: Sign-in support;",
       "Improvement: Import user playlists (favorites, history, reposts, listen-later and custom playlists);",
       "Improvement: Import user subscriptions;",
-      "Improvement: Add missing date in video details;"
+      "Fix: Add missing date in video details;",
+      "Fix: Add live and upload content description;",
+      "Fix: Play preview uploads;"
     ]
   }
 }
