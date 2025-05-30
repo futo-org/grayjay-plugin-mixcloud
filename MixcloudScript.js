@@ -806,6 +806,67 @@ source.getUserPlaylists = function () {
   }
 }
 
+/**
+ * Gets the authenticated user's subscriptions (following list)
+ * @returns {string[]} Array of channel URLs for subscribed channels
+ */
+source.getUserSubscriptions = function () {
+  try {
+    // Get current user info
+    const userResponse = makeGraphQLRequest("getViewerDataQuery", {}, null, true);
+    
+    if (!userResponse?.data?.viewer?.me?.username) {
+      logError("Unable to get current user info for subscriptions");
+      return [];
+    }
+    
+    const username = userResponse.data.viewer.me.username;
+    const allSubscriptionUrls = [];
+    let hasMore = true;
+    let cursor = null;
+    
+    // Paginate through all followings
+    while (hasMore) {
+      const variables = {
+        lookup: { username: username },
+        count: 20
+      };
+      
+      if (cursor) {
+        variables.cursor = cursor;
+      }
+      
+      const followingsResponse = makeGraphQLRequest("UserFollowingsQuery", variables, null, true);
+      
+      if (!followingsResponse?.data?.user?.followings) {
+        break;
+      }
+      
+      const followings = followingsResponse.data.user.followings;
+      const edges = followings.edges || [];
+      const pageInfo = followings.pageInfo || {};
+      
+      // Extract followings and map to channel URLs
+      const subscriptionUrls = edges.map(edge => {
+        const user = edge.node;
+        return `${URLS.BASE_URL}/${user.username}/`;
+      });
+      
+      // Add to all subscriptions
+      allSubscriptionUrls.push(...subscriptionUrls);
+      
+      // Update pagination
+      hasMore = pageInfo.hasNextPage || false;
+      cursor = pageInfo.endCursor || null;
+    }
+    
+    return allSubscriptionUrls;
+  } catch (error) {
+    logError(`Exception in getUserSubscriptions: ${error.message}`);
+    return [];
+  }
+}
+
 // ====================== DECRYPTION FUNCTIONS ======================
 
 /**
@@ -2347,8 +2408,6 @@ class TracksPager extends ContentPager {
     }
   }
 }
-
-
 
 // ====================== GRAPHQL QUERIES ======================
 
@@ -4931,6 +4990,39 @@ query getViewerDataQuery {
   }
 }
 
+`,
+  UserFollowingsQuery: `
+query UserFollowingsQuery(
+  $lookup: UserLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  user: userLookup(lookup: $lookup) {
+    id
+    username
+    displayName
+    followings(first: $count, after: $cursor) {
+      edges {
+        node {
+          id
+          username
+          displayName
+          picture {
+            urlRoot
+          }
+          followers {
+            totalCount
+          }
+          biog
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
 `
 
 };
