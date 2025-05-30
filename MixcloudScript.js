@@ -298,10 +298,17 @@ source.getChannel = function (url) {
     });
   }
 
+  let description = channelInfo?.data?.user?.biog ?? '';
+  const location = [channelInfo?.data?.user?.country, channelInfo?.data?.user?.city].filter(Boolean).join(', ');
+  
+  if (location) {
+    description += `\n\n${location}`;
+  }
+
   return new PlatformChannel({
     id: new PlatformID(PLATFORM.name, channelInfo.data.user.id, config.id),
     name: channelInfo.data.user.displayName,
-    description: channelInfo.data.user.biog,
+    description: description,
     url: url,
     thumbnail: channelInfo.data.user.picture?.urlRoot ?
       createThumbnailUrl(channelInfo.data.user.picture.urlRoot, 272, 272) :

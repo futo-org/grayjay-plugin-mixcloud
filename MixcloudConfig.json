@@ -52,6 +52,7 @@
       "Improvement: Add login support;",
       "Improvement: Import user playlists (favorites, history, reposts, listen-later and custom playlists);",
       "Improvement: Import user subscriptions;",
+      "Improvement: Add creator's country and city in channel description;",
       "Fix: Add missing date in video details;",
       "Fix: Add live and upload content description;",
       "Fix: Play preview uploads;"
