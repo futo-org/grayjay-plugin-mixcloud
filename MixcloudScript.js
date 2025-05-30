@@ -12,7 +12,7 @@ const PLATFORM = {
 const URLS = {
   GRAPHQL_URL: "https://app.mixcloud.com/graphql",
   BASE_URL: "https://www.mixcloud.com"
-}
+};
 
 // Default request headers for API requests
 const DEFAULT_REST_HEADERS = {
@@ -157,7 +157,7 @@ source.getHome = function () {
 source.isContentDetailsUrl = function (url) {
 
   // Check if URL is in the reserved list
-  if (isPlatformReserverdUrl(url)) {
+  if (isPlatformReservedUrl(url)) {
     return false;
   }
 
@@ -192,38 +192,6 @@ source.getContentDetails = function (encodedUrl) {
   }
 };
 
-/**
- * Gets streaming sources for content
- * @param {string} url Content URL
- * @returns {Promise<Object>} Promise resolving to streaming sources
- */
-source.getContentStream = function (url) {
-  // Get the content details, which already contains the streaming details
-  return source.getContentDetails(url).then(details => {
-    // For live streams
-    if (details.isLive) {
-      return {
-        videoSources: [{
-          url: details.video.hls,
-          type: "hls"
-        }]
-      };
-    }
-
-    // For regular mixes
-    if (details.video && details.video.audioSources && details.video.audioSources.length > 0) {
-      return {
-        audioSources: details.video.audioSources.map(source => ({
-          url: source.url,
-          type: source.type || "hls"
-        }))
-      };
-    }
-
-    // No valid sources found
-    throw new UnavailableException("No valid streaming sources found");
-  });
-};
 
 /**
  * Returns chat window information for live Mixcloud streams with chat
@@ -252,7 +220,7 @@ source.getLiveChatWindow = function (url) {
  */
 source.isChannelUrl = function (url) {
   // Check if URL is in the reserved list
-  if (isPlatformReserverdUrl(url)) {
+  if (isPlatformReservedUrl(url)) {
     return false;
   }
 
@@ -1392,7 +1360,7 @@ function makeRequestWithRetry(method, url, body = null, headers = {}, options = 
  */
 function isValidURL(str) {
   try {
-    return url?.startsWith('https://');
+    return str?.startsWith('https://');
   } catch (_) {
     return false;
   }
@@ -1555,7 +1523,7 @@ function secondsToHMS(seconds) {
   return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
 }
 
-function isPlatformReserverdUrl(url) {
+function isPlatformReservedUrl(url) {
 
   if (!url?.trim()) {
     return false;
