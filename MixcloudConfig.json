@@ -54,7 +54,7 @@
       "Fix: Add live and upload content description;",
       "Fix: Play preview uploads;",
       "Improvement: Sign-in support;",
-      "Improvement: Import user playlists;",
+      "Improvement: Import user playlists (favorites, history, reposts, listen-later and custom playlists);",
       "Improvement: Import user subscriptions;",
       "Improvement: Add missing date in video details;"
     ]
