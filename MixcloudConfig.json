@@ -55,7 +55,8 @@
       "Fix: Play preview uploads;",
       "Improvement: Sign-in support;",
       "Improvement: Import user playlists;",
-      "Improvement: Import user subscriptions;"
+      "Improvement: Import user subscriptions;",
+      "Improvement: Add missing date in video details;"
     ]
   }
 }
