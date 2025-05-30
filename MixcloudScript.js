@@ -760,6 +760,7 @@ source.getUserPlaylists = function () {
     const allPlaylistUrls = [
       `${URLS.BASE_URL}/${username}/favorites/`,
       `${URLS.BASE_URL}/${username}/listens/`,  // History
+      `${URLS.BASE_URL}/${username}/reposts/`,  // User reposts
       `${URLS.BASE_URL}/listen-later/`  // Global listen-later URL
     ];
     let hasMore = true;
