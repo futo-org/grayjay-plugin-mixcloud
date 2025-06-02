@@ -12,7 +12,7 @@ const PLATFORM = {
 const URLS = {
   GRAPHQL_URL: "https://app.mixcloud.com/graphql",
   BASE_URL: "https://www.mixcloud.com"
-}
+};
 
 // Default request headers for API requests
 const DEFAULT_REST_HEADERS = {
@@ -33,6 +33,7 @@ const REGEX = {
   PLAYLISTS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/playlists\/?$/,
   FAVORITES_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/favorites\/?$/,
   HISTORY_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/listens\/?$/,
+  LISTEN_LATER_URL: /^https:\/\/www\.mixcloud\.com\/listen-later\/?$/,
   REPOSTS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/reposts\/?$/,
   TRACKS_URL: /^https:\/\/www\.mixcloud\.com\/([^\/]+)\/tracks\/?$/
 };
@@ -89,7 +90,6 @@ const RESERVED_URL_LIST = [
   "https://www.mixcloud.com/trending/",
   "https://www.mixcloud.com/favorites/",
   "https://www.mixcloud.com/history/",
-  "https://www.mixcloud.com/listen-later/",
   "https://www.mixcloud.com/dashboard/playlists/",
   "https://www.mixcloud.com/jobs/",
   "https://www.mixcloud.com/press/",
@@ -108,8 +108,35 @@ const RESERVED_URL_LIST = [
 // Plugin configuration storage
 let config = {};
 
+let state = {
+  hasPremiumFeatures: false,
+  hasProFeatures: false
+};
+
 source.enable = function (conf, settings, saveStateStr) {
   config = conf ?? {};
+
+  if (saveStateStr) {
+    state = JSON.parse(saveStateStr);
+  }
+  else {
+    if (bridge.isLoggedIn()) {
+      
+      const useAuth = true;
+      const cloudcastInfo = makeGraphQLRequest("getViewerDataQuery", {}, null, useAuth);
+
+      if (cloudcastInfo?.data?.viewer?.me) {
+        state.hasPremiumFeatures = cloudcastInfo?.data?.viewer?.me?.hasPremiumFeatures ?? false;
+        state.hasProFeatures = cloudcastInfo?.data?.viewer?.me?.hasProFeatures ?? false;
+      }
+    }
+  }
+
+};
+
+
+source.saveState = () => {
+    return JSON.stringify(state);
 };
 
 // ====================== PLUGIN ENTRY POINTS ======================
@@ -130,7 +157,7 @@ source.getHome = function () {
 source.isContentDetailsUrl = function (url) {
 
   // Check if URL is in the reserved list
-  if (isPlatformReserverdUrl(url)) {
+  if (isPlatformReservedUrl(url)) {
     return false;
   }
 
@@ -165,38 +192,6 @@ source.getContentDetails = function (encodedUrl) {
   }
 };
 
-/**
- * Gets streaming sources for content
- * @param {string} url Content URL
- * @returns {Promise<Object>} Promise resolving to streaming sources
- */
-source.getContentStream = function (url) {
-  // Get the content details, which already contains the streaming details
-  return source.getContentDetails(url).then(details => {
-    // For live streams
-    if (details.isLive) {
-      return {
-        videoSources: [{
-          url: details.video.hls,
-          type: "hls"
-        }]
-      };
-    }
-
-    // For regular mixes
-    if (details.video && details.video.audioSources && details.video.audioSources.length > 0) {
-      return {
-        audioSources: details.video.audioSources.map(source => ({
-          url: source.url,
-          type: source.type || "hls"
-        }))
-      };
-    }
-
-    // No valid sources found
-    throw new UnavailableException("No valid streaming sources found");
-  });
-};
 
 /**
  * Returns chat window information for live Mixcloud streams with chat
@@ -225,7 +220,7 @@ source.getLiveChatWindow = function (url) {
  */
 source.isChannelUrl = function (url) {
   // Check if URL is in the reserved list
-  if (isPlatformReserverdUrl(url)) {
+  if (isPlatformReservedUrl(url)) {
     return false;
   }
 
@@ -271,10 +266,17 @@ source.getChannel = function (url) {
     });
   }
 
+  let description = channelInfo?.data?.user?.biog ?? '';
+  const location = [channelInfo?.data?.user?.country, channelInfo?.data?.user?.city].filter(Boolean).join(', ');
+  
+  if (location) {
+    description += `\n\n${location}`;
+  }
+
   return new PlatformChannel({
     id: new PlatformID(PLATFORM.name, channelInfo.data.user.id, config.id),
     name: channelInfo.data.user.displayName,
-    description: channelInfo.data.user.biog,
+    description: description,
     url: url,
     thumbnail: channelInfo.data.user.picture?.urlRoot ?
       createThumbnailUrl(channelInfo.data.user.picture.urlRoot, 272, 272) :
@@ -368,7 +370,7 @@ source.getChannelPlaylists = function (url) {
  * @returns {boolean} True if URL is a playlist URL
  */
 source.isPlaylistUrl = function (url) {
-  return urlMatches(url, REGEX.PLAYLIST_URL) || urlMatches(url, REGEX.PLAYLISTS_URL) || urlMatches(url, REGEX.FAVORITES_URL) || urlMatches(url, REGEX.HISTORY_URL) || urlMatches(url, REGEX.REPOSTS_URL) || urlMatches(url, REGEX.TRACKS_URL);
+  return urlMatches(url, REGEX.PLAYLIST_URL) || urlMatches(url, REGEX.PLAYLISTS_URL) || urlMatches(url, REGEX.FAVORITES_URL) || urlMatches(url, REGEX.HISTORY_URL) || urlMatches(url, REGEX.LISTEN_LATER_URL) || urlMatches(url, REGEX.REPOSTS_URL) || urlMatches(url, REGEX.TRACKS_URL);
 };
 
 /**
@@ -415,6 +417,13 @@ function getPlaylistContents(url) {
   if (tracksMatch && tracksMatch[1]) {
     const username = tracksMatch[1];
     return new TracksPager(username);
+  }
+  
+  // Check if it's a listen-later URL (global, no username)
+  const listenLaterMatch = url.match(REGEX.LISTEN_LATER_URL);
+  
+  if (listenLaterMatch) {
+    return new ListenLaterPager();
   }
   
   // Otherwise, it's a specific playlist
@@ -600,6 +609,35 @@ source.getPlaylist = function (url) {
     });
   }
   
+  // Check if it's a listen-later URL
+  const listenLaterMatch = url.match(REGEX.LISTEN_LATER_URL);
+  
+  if (listenLaterMatch) {
+    // Get current user info for listen-later "playlist"
+    const userInfo = makeGraphQLRequest("getViewerDataQuery", {}, null, true);
+    
+    if (!userInfo?.data?.viewer?.me) {
+      throw new UnavailableException("User not authenticated");
+    }
+    
+    const user = userInfo.data.viewer.me;
+    
+    return new PlatformPlaylistDetails({
+      id: new PlatformID(PLATFORM.name, "listen_later", config.id),
+      name: "Listen Later",
+      url: url,
+      thumbnail: 'https://plugins.grayjay.app/Mixcloud/MixcloudIcon.png',  // Listen Later doesn't have a specific thumbnail
+      author: new PlatformAuthorLink(
+        new PlatformID(PLATFORM.name, user.id || "me", config.id),
+        user.username || "Me",
+        createMixcloudUrl(user.username || ""),
+        null
+      ),
+      videoCount: -1,  // Unknown count for listen later
+      contents: getPlaylistContents(url)
+    });
+  }
+  
   // Check if it's a channel playlists URL
   const playlistsMatch = url.match(REGEX.PLAYLISTS_URL);
   
@@ -677,6 +715,134 @@ source.getComments = function (url) {
   return new MixcloudCommentPager(url);
 }
 
+/**
+ * Get user playlists
+ * @returns {string[]} Array of playlist URLs
+ */
+source.getUserPlaylists = function () {
+  try {
+    // Get current user info to build system playlist URLs
+    const userResponse = makeGraphQLRequest("getViewerDataQuery", {}, null, true);
+    
+    if (!userResponse?.data?.viewer?.me?.username) {
+      logError("Unable to get current user info for playlists");
+      return [];
+    }
+    
+    const username = userResponse.data.viewer.me.username;
+    
+    // System playlists for current user
+    const allPlaylistUrls = [
+      `${URLS.BASE_URL}/${username}/favorites/`,
+      `${URLS.BASE_URL}/${username}/listens/`,  // History
+      `${URLS.BASE_URL}/${username}/reposts/`,  // User reposts
+      `${URLS.BASE_URL}/listen-later/`  // Global listen-later URL
+    ];
+    let hasMore = true;
+    let cursor = null;
+    
+    // Paginate through all playlists
+    while (hasMore) {
+      const variables = {};
+      if (cursor) {
+        variables.cursor = cursor;
+      }
+      
+      const playlistsResponse = makeGraphQLRequest("PlaylistsQuery", variables, null, true);
+      
+      if (!playlistsResponse?.data?.viewer?.me?.playlists) {
+        break;
+      }
+      
+      const playlists = playlistsResponse.data.viewer.me.playlists;
+      const edges = playlists.edges || [];
+      const pageInfo = playlists.pageInfo || {};
+      
+      // Extract playlists and map to URLs
+      const playlistUrls = edges.map(edge => {
+        const playlist = edge.node;
+        const owner = playlist.owner;
+        
+        // Return the full playlist URL
+        return `${URLS.BASE_URL}/${owner.username}/playlists/${playlist.slug}/`;
+      });
+      
+      // Add to all playlists
+      allPlaylistUrls.push(...playlistUrls);
+      
+      // Update pagination
+      hasMore = pageInfo.hasNextPage || false;
+      cursor = pageInfo.endCursor || null;
+    }
+    
+    return allPlaylistUrls;
+  } catch (error) {
+    logError(`Exception in getUserPlaylists: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Gets the authenticated user's subscriptions (following list)
+ * @returns {string[]} Array of channel URLs for subscribed channels
+ */
+source.getUserSubscriptions = function () {
+  try {
+    // Get current user info
+    const userResponse = makeGraphQLRequest("getViewerDataQuery", {}, null, true);
+    
+    if (!userResponse?.data?.viewer?.me?.username) {
+      logError("Unable to get current user info for subscriptions");
+      return [];
+    }
+    
+    const username = userResponse.data.viewer.me.username;
+    const allSubscriptionUrls = [];
+    let hasMore = true;
+    let cursor = null;
+    
+    // Paginate through all followings
+    while (hasMore) {
+      const variables = {
+        lookup: { username: username },
+        count: 20
+      };
+      
+      if (cursor) {
+        variables.cursor = cursor;
+      }
+      
+      const followingsResponse = makeGraphQLRequest("UserFollowingsQuery", variables, null, true);
+      
+      if (!followingsResponse?.data?.user?.followings) {
+        break;
+      }
+      
+      const followings = followingsResponse.data.user.followings;
+      const edges = followings.edges || [];
+      const pageInfo = followings.pageInfo || {};
+      
+      // Extract followings and map to channel URLs
+      const subscriptionUrls = edges.map(edge => {
+        const user = edge.node;
+        return `${URLS.BASE_URL}/${user.username}/`;
+      });
+      
+      // Add to all subscriptions
+      allSubscriptionUrls.push(...subscriptionUrls);
+      
+      // Update pagination
+      hasMore = pageInfo.hasNextPage || false;
+      cursor = pageInfo.endCursor || null;
+    }
+    
+    return allSubscriptionUrls;
+  } catch (error) {
+    logError(`Exception in getUserSubscriptions: ${error.message}`);
+    return [];
+  }
+}
+
 // ====================== DECRYPTION FUNCTIONS ======================
 
 /**
@@ -737,6 +903,8 @@ function getContentDetailsCloudcast(url) {
   const cloudcast = cloudcastInfo.data.cloudcast;
 
   const sources = [];
+
+  const isPreview = cloudcast.isExclusive && cloudcast.previewUrl;
 
   if (cloudcast?.streamInfo?.hlsUrl) {
 
@@ -810,6 +978,14 @@ function getContentDetailsCloudcast(url) {
       language: "Unknown",
     }));
   }
+  else if (isPreview) {
+    sources.push(new AudioUrlSource({
+      name: "Audio",
+      url: cloudcast.previewUrl,
+      container: "mp3",
+      duration: -1
+    }));
+  }
 
   if (!sources.length) {
     throw new UnavailableException("No sources available for cloudcast");
@@ -817,15 +993,19 @@ function getContentDetailsCloudcast(url) {
 
   const platformVideo = cloudcastToPlatformVideo(cloudcast);
 
+  // Extract tags from the cloudcast
+  // const tags = extractTags(cloudcastInfo?.data?.cloudcast?.tagList);
+
   const platformVideoDetails = new PlatformVideoDetails({
     id: platformVideo.id,
     name: platformVideo.name,
-    description: platformVideo.description,
+    description: cloudcast.description,
     author: platformVideo.author,
     url: platformVideo.url,
     duration: platformVideo.duration,
     thumbnails: platformVideo.thumbnails,
     viewCount: platformVideo.viewCount,
+    datetime: platformVideo.datetime,
     video: new UnMuxVideoSourceDescriptor([], sources),
     isLive: false,
   });
@@ -849,6 +1029,10 @@ function getContentDetailsCloudcast(url) {
 
     return new ContentPager(contentList, false);
   };
+
+  if(isPreview) {
+    bridge.toast('Preview - Subscribe to the artist to access the full content.')
+  }
 
   return platformVideoDetails;
 }
@@ -899,7 +1083,7 @@ function getContentDetailsLiveStream(url) {
   const platformVideoDetails = new PlatformVideoDetails({
     id: platformVideo.id,
     name: platformVideo.name,
-    description: platformVideo.description,
+    description: liveStream.description,
     author: platformVideo.author,
     url: platformVideo.url,
     viewCount: platformVideo.viewCount,
@@ -943,17 +1127,12 @@ function cloudcastToPlatformVideo(cloudcast) {
     createThumbnailUrl(cloudcast.picture.urlRoot, 600, 600) :
     '';
 
-  // Extract tags from the cloudcast
-  const tags = extractTags(cloudcast.tagList);
-
-  // Format publish date
-  const publishDate = cloudcast.publishDate ? dateToUnixSeconds(cloudcast.publishDate) : null;
+  // Format publish date - return 0 if no date available
+  const publishDate = cloudcast.publishDate ? dateToUnixSeconds(cloudcast.publishDate) : 0;
 
   const authorThumbnailUrl = cloudcast.owner.picture?.urlRoot ?
     createThumbnailUrl(cloudcast.owner.picture.urlRoot, 272, 272) :
     '';
-
-  const description = cloudcast.description || (tags.length ? tags.join(", ") : "");
 
   // Use channel username if provided (for channel content)
   // This handles cases where the content URL uses a different username than the owner
@@ -961,9 +1140,19 @@ function cloudcastToPlatformVideo(cloudcast) {
 
   const contentUrl = cloudcast.url || createMixcloudUrl(urlUsername, cloudcast.slug);
 
+  const isPreview = cloudcast.isExclusive && cloudcast.previewUrl;
+
+  let name = cloudcast.name;
+  let duration = cloudcast.audioLength || 0;
+
+  if(isPreview) {
+    name = '(preview) ' + name
+    duration = 20;
+  }
+
   return new PlatformVideo({
     id: new PlatformID(PLATFORM.name, cloudcast.id, config.id),
-    name: cloudcast.name,
+    name,
     thumbnails: new Thumbnails([new Thumbnail(thumbnailUrl)]),
     author: new PlatformAuthorLink(
       new PlatformID(PLATFORM.name, cloudcast.owner.id, config.id),
@@ -971,7 +1160,7 @@ function cloudcastToPlatformVideo(cloudcast) {
       createMixcloudUrl(cloudcast.owner.username),
       authorThumbnailUrl || thumbnailUrl  // Use author thumbnail if available, otherwise use content thumbnail
     ),
-    duration: cloudcast.audioLength || 0,
+    duration,
     viewCount: cloudcast.plays || 0,
     url: contentUrl,
     uploadDate: publishDate,
@@ -1024,7 +1213,7 @@ function liveStreamToPlatformVideo(stream) {
  * @param {string} operationName Operation name for the GraphQL request
  * @returns {Object|null} Response body or null on error
  */
-function makeGraphQLRequest(queryName, variables, operationName) {
+function makeGraphQLRequest(queryName, variables, operationName, useAuth = false) {
   try {
     if (!GQL_QUERIES[queryName]) {
       logError(`Unknown GraphQL query: ${queryName}`);
@@ -1042,7 +1231,7 @@ function makeGraphQLRequest(queryName, variables, operationName) {
       variables: variables
     };
 
-    const response = makeRequestWithRetry('POST', URLS.GRAPHQL_URL, JSON.stringify(queryInfo), DEFAULT_REST_HEADERS, { parseResponse: true });
+    const response = makeRequestWithRetry('POST', URLS.GRAPHQL_URL, JSON.stringify(queryInfo), DEFAULT_REST_HEADERS, { parseResponse: true, useAuth: useAuth });
 
     if (!response.isOk) {
       logError(`GraphQL request failed. Query: ${queryName}, Status: ${response.code}`);
@@ -1171,7 +1360,7 @@ function makeRequestWithRetry(method, url, body = null, headers = {}, options = 
  */
 function isValidURL(str) {
   try {
-    return url?.startsWith('https://');
+    return str?.startsWith('https://');
   } catch (_) {
     return false;
   }
@@ -1334,7 +1523,7 @@ function secondsToHMS(seconds) {
   return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
 }
 
-function isPlatformReserverdUrl(url) {
+function isPlatformReservedUrl(url) {
 
   if (!url?.trim()) {
     return false;
@@ -2051,6 +2240,55 @@ class HistoryPager extends ContentPager {
 }
 
 /**
+ * Custom pager implementation for listen later
+ */
+class ListenLaterPager extends ContentPager {
+  constructor() {
+    super([], true);
+    this.cursor = null;
+    this.hasMore = true;
+    this.nextPage();
+  }
+
+  nextPage() {
+    if (!this.hasMore) {
+      return this;
+    }
+
+    try {
+      const variables = {};
+      
+      // Add cursor for pagination if we have one
+      if (this.cursor) {
+        variables.cursor = this.cursor;
+      }
+
+      const response = makeGraphQLRequest("ListenLaterQuery", variables, null, true);
+
+      if (!response?.data?.viewer?.listenLaters?.edges?.length) {
+        this.hasMore = false;
+        return this;
+      }
+
+      const pageInfo = response.data.viewer.listenLaters.pageInfo;
+      this.hasMore = pageInfo.hasNextPage;
+      this.cursor = pageInfo.endCursor;
+
+      const videos = response.data.viewer.listenLaters.edges
+        .filter(edge => edge.node && edge.node.isPlayable)
+        .map(edge => cloudcastToPlatformVideo(edge.node));
+
+      this.results = videos;
+      return this;
+    } catch (error) {
+      logError(`Exception in ListenLaterPager.nextPage: ${error.message}`);
+      this.hasMore = false;
+      return this;
+    }
+  }
+}
+
+/**
  * Custom pager implementation for user reposts
  */
 class RepostsPager extends ContentPager {
@@ -2147,8 +2385,6 @@ class TracksPager extends ContentPager {
     }
   }
 }
-
-
 
 // ====================== GRAPHQL QUERIES ======================
 
@@ -2308,6 +2544,47 @@ query UserListeningHistoryQuery(
       pageInfo {
         hasNextPage
         endCursor
+      }
+    }
+  }
+}`,
+  ListenLaterQuery: `
+query ListenLaterQuery(
+  $cursor: String
+) {
+  viewer {
+    id
+    listenLaters(first: 10, after: $cursor) {
+      edges {
+        cursor
+        node {
+          __typename
+          id
+          name
+          slug
+          url
+          publishDate
+          audioLength
+          plays
+          owner {
+            id
+            username
+            displayName
+            picture {
+              urlRoot
+            }
+          }
+          picture {
+            urlRoot
+          }
+          isExclusive
+          isExclusivePreviewOnly
+          isPlayable
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
       }
     }
   }
@@ -3825,10 +4102,12 @@ query CloudcastLookup($lookup: CloudcastLookup!) {
 		slug
 		isUnlisted
 		isShortLength
+    isExclusive
 		audioType
 		audioLength
 		description
 		url
+    previewUrl
     plays
     publishDate
 		streamInfo(timestamper: false) {
@@ -4632,5 +4911,95 @@ fragment usePlayWithRestrictions_cloudcast on Cloudcast {
   ...useExclusiveCloudcastModal_cloudcast
 }
 
+`,
+PlaylistsQuery: `
+query PlaylistsQuery(
+  $cursor: String
+) {
+  viewer {
+    me {
+      playlists(first: 21, orderBy: ALPHABETICAL, after: $cursor) {
+        edges {
+          node {
+            name
+            slug
+            owner {
+              username
+              displayName
+              id
+            }
+            picture(height: 160) {
+              urlRoot
+              primaryColor
+            }
+            items {
+              totalCount
+            }
+            id
+          }
+          cursor
+        }
+        pageInfo {
+          endCursor
+          hasNextPage
+        }
+      }
+      id
+    }
+    id
+  }
+}
+`,
+getViewerDataQuery: `
+query getViewerDataQuery {
+  viewer {
+    me {
+      id
+      email
+      username
+      hasProFeatures
+      hasPremiumFeatures
+      isSelfDeclaredCreator
+      isStaff
+      isUploader
+    }
+    id
+  }
+}
+
+`,
+  UserFollowingsQuery: `
+query UserFollowingsQuery(
+  $lookup: UserLookup!
+  $count: Int = 20
+  $cursor: String
+) {
+  user: userLookup(lookup: $lookup) {
+    id
+    username
+    displayName
+    followings(first: $count, after: $cursor) {
+      edges {
+        node {
+          id
+          username
+          displayName
+          picture {
+            urlRoot
+          }
+          followers {
+            totalCount
+          }
+          biog
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
 `
+
 };

@@ -8,19 +8,28 @@
   "scriptUrl": "./MixcloudScript.js",
   "iconUrl": "./MixcloudIcon.png",
   "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
-  "version": 2,
+  "version": 3,
   "id": "84331338-b045-419c-88e4-c86036f4cbf5",
   "scriptSignature": "",
   "scriptPublicKey": "",
   "packages": [
-    "Http",
-    "Utilities"
+    "Http"
   ],
   "allowEval": false,
   "allowUrls": [
     ".mixcloud.com",
     ".mixcloud.stream"
   ],
+  "authentication": {
+    "userAgent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.5481.153 Mobile Safari/537.36",
+    "loginUrl": "https://www.mixcloud.com/login/?next=%2Fhome%2Ffor-you%2F",
+    "completionUrl": "https://www.mixcloud.com/home/for-you/",
+    "cookiesToFind": [
+      "csrftoken",
+      "mx_t",
+      "c"
+    ]
+  },
   "changelog": {
     "1": [
       "Home with live streams;",
@@ -38,6 +47,15 @@
       "Improvement: Improve plugin's logo resolution;",
       "Improvement: Use channel videos as recommendations for livestreams;",
       "Improvement: Support encrypted sources;"
+    ],
+    "3": [
+      "Improvement: Add login support;",
+      "Improvement: Import user playlists (favorites, history, reposts, listen-later and custom playlists);",
+      "Improvement: Import user subscriptions;",
+      "Improvement: Add creator's country and city in channel description;",
+      "Fix: Add missing date in video details;",
+      "Fix: Add live and upload content description;",
+      "Fix: Play preview uploads;"
     ]
   }
 }
