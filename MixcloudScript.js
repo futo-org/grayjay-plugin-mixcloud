@@ -11,7 +11,8 @@ const PLATFORM = {
 
 const URLS = {
   GRAPHQL_URL: "https://app.mixcloud.com/graphql",
-  BASE_URL: "https://www.mixcloud.com"
+  BASE_URL: "https://www.mixcloud.com",
+  PLUGIN_ICON_URL: "https://plugins.grayjay.app/Mixcloud/MixcloudIcon.png"
 };
 
 // Default request headers for API requests
@@ -626,7 +627,7 @@ source.getPlaylist = function (url) {
       id: new PlatformID(PLATFORM.name, "listen_later", config.id),
       name: "Listen Later",
       url: url,
-      thumbnail: 'https://plugins.grayjay.app/Mixcloud/MixcloudIcon.png',  // Listen Later doesn't have a specific thumbnail
+      thumbnail: URLS.PLUGIN_ICON_URL,  // Listen Later doesn't have a specific thumbnail
       author: new PlatformAuthorLink(
         new PlatformID(PLATFORM.name, user.id || "me", config.id),
         user.username || "Me",
