@@ -8,7 +8,7 @@
   "scriptUrl": "./MixcloudScript.js",
   "iconUrl": "./MixcloudIcon.png",
   "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
-  "version": 3,
+  "version": 4,
   "id": "84331338-b045-419c-88e4-c86036f4cbf5",
   "scriptSignature": "",
   "scriptPublicKey": "",
@@ -20,6 +20,7 @@
     ".mixcloud.com",
     ".mixcloud.stream"
   ],
+  "maxDownloadParallelism": 1,
   "authentication": {
     "userAgent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.5481.153 Mobile Safari/537.36",
     "loginUrl": "https://www.mixcloud.com/login/?next=%2Fhome%2Ffor-you%2F",
@@ -56,6 +57,12 @@
       "Fix: Add missing date in video details;",
       "Fix: Add live and upload content description;",
       "Fix: Play preview uploads;"
+    ],
+    "4": [
+      "Fix: Deep-linking to playlists;",
+      "Code improvements;",
+      "Improvement: Improve handling Radios with multiple DJs;",
+      "Improvement: Include an hyperlink in the track description to the Dj channel when playing for a Radio;"
     ]
   }
 }
