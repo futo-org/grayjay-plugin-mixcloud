@@ -8,7 +8,7 @@
   "scriptUrl": "./MixcloudScript.js",
   "iconUrl": "./MixcloudIcon.png",
   "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
-  "version": 4,
+  "version": 5,
   "id": "84331338-b045-419c-88e4-c86036f4cbf5",
   "scriptSignature": "",
   "scriptPublicKey": "",
@@ -63,6 +63,9 @@
       "Code improvements;",
       "Improvement: Improve handling Radios with multiple DJs;",
       "Improvement: Include an hyperlink in the track description to the Dj channel when playing for a Radio;"
+    ],
+    "5": [
+      "Fix: Content recommendations for live streams;"
     ]
   }
 }

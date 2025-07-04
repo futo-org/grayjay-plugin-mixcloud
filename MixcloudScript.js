@@ -1060,7 +1060,7 @@ function getContentDetailsLiveStream(url) {
     }
 
     // Return a pager without the live stream in initialData (empty array instead)
-    return new ChannelContentPager(channelInfo.data.user.id, username, []);
+    return new ChannelContentPager(channelInfo, username, []);
   };
 
   return platformVideoDetails;
