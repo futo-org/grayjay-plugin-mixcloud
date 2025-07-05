@@ -933,13 +933,13 @@ function getContentDetailsCloudcast(url) {
     let description = cloudcast.description || "";
 
   if (!isMixCloudOwnChannelContent) {
-    description += `\n\nBy <a href="${cloudcast.owner.url}">${cloudcast.owner.displayName}</a>`;
+    description += `\n\n<a href="${cloudcast.owner.url}">${cloudcast.owner.displayName}</a>`;
   } else {
     
     const creator = cloudcast?.creatorAttributions?.edges?.[0]?.node;
     
     if (creator) {
-      description += `\n\nFor <a href="${creator.url}">${creator.displayName}</a>`;
+      description += `\n\n<a href="${creator.url}">${creator.displayName}</a>`;
     }
   }
 
