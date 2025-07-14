@@ -834,7 +834,8 @@ function getContentDetailsCloudcast(url) {
       "username": username,
       "slug": slug
     }
-  });
+  }, null, true);
+
   if (!cloudcastInfo?.data?.cloudcast) {
     throw new UnavailableException("Cloudcast not found");
   }
@@ -843,7 +844,7 @@ function getContentDetailsCloudcast(url) {
 
   const sources = [];
 
-  const isPreview = cloudcast.isExclusive && cloudcast.previewUrl;
+  const isPreview = isLimitedPreview(cloudcast);
 
   if (cloudcast?.streamInfo?.hlsUrl) {
 
@@ -942,7 +943,7 @@ function getContentDetailsCloudcast(url) {
       description += `\n\n<a href="${creator.url}">${creator.displayName}</a>`;
     }
   }
-
+  
 
   const platformVideo = cloudcastToPlatformVideo(cloudcast);
 
@@ -1068,6 +1069,21 @@ function getContentDetailsLiveStream(url) {
 
 // ====================== CONTENT CONVERSION HELPERS ======================
 
+
+/**
+ * Checks if a cloudcast is a limited preview (exclusive content without subscription)
+ * 
+ * @param {Object} cloudcast - The cloudcast object to check
+ * @param {boolean} cloudcast.isExclusive - Whether the cloudcast is exclusive content
+ * @param {string} cloudcast.previewUrl - Preview URL if available
+ * @param {Object} cloudcast.owner - The cloudcast owner object
+ * @param {boolean} cloudcast.owner.isSubscribedTo - Whether user is subscribed to the owner
+ * @returns {boolean} True if the cloudcast is a limited preview, false otherwise
+ */
+function isLimitedPreview(cloudcast) {
+  return !!cloudcast.isExclusive && !!cloudcast.previewUrl && !cloudcast?.owner.isSubscribedTo;
+}
+
 /**
  * Converts a Mixcloud Cloudcast object to a PlatformVideo
  * 
@@ -1090,7 +1106,7 @@ function cloudcastToPlatformVideo(cloudcast) {
 
   let contentUrl = cloudcast.url || createMixcloudUrl(urlUsername, cloudcast.slug);
 
-  const isPreview = cloudcast.isExclusive && cloudcast.previewUrl;
+  const isPreview = isLimitedPreview(cloudcast);
 
   let name = cloudcast.name;
   let duration = cloudcast.audioLength || 0;
@@ -1098,6 +1114,9 @@ function cloudcastToPlatformVideo(cloudcast) {
   if (isPreview) {
     name = '(preview) ' + name
     duration = 20;
+  }
+  else if(cloudcast.isExclusive) {
+    name = '(exclusive) ' + name;
   }
 
   const isMixCloudOwnChannelContent = cloudcast._channelUsername === cloudcast.owner?.username;
@@ -1622,7 +1641,7 @@ class ChannelContentPager extends ContentPager {
         cursor: this.cursor
       };
 
-      const channelInfo = makeGraphQLRequest("UserUploadsPagePaginationQuery", variables);
+      const channelInfo = makeGraphQLRequest("UserUploadsPagePaginationQuery", variables, null, true);
 
       // Check if we have valid data
       if (!channelInfo?.data?.node?.uploads?.edges?.length) {

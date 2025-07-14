@@ -69,6 +69,9 @@
     ],
     "6": [
      "Improvement: Fix relationship between DJs and Radios in content description;"
+    ],
+    "7": [
+      "Improvement: Add exclusive subscriber-only content support;"
     ]
   }
 }
