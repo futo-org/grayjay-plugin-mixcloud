@@ -11,7 +11,8 @@ const PLATFORM = {
 
 const URLS = {
   GRAPHQL_URL: "https://app.mixcloud.com/graphql",
-  BASE_URL: "https://www.mixcloud.com"
+  BASE_URL: "https://www.mixcloud.com",
+  PLUGIN_ICON_URL: "https://plugins.grayjay.app/Mixcloud/MixcloudIcon.png"
 };
 
 // Default request headers for API requests
@@ -511,7 +512,7 @@ source.getPlaylist = function (url) {
       id: new PlatformID(PLATFORM.name, "listen_later", config.id),
       name: "Listen Later",
       url: url,
-      thumbnail: 'https://plugins.grayjay.app/Mixcloud/MixcloudIcon.png',  // Listen Later doesn't have a specific thumbnail
+      thumbnail: URLS.PLUGIN_ICON_URL,  // Listen Later doesn't have a specific thumbnail
       author: new PlatformAuthorLink(
         new PlatformID(PLATFORM.name, user.id || "me", config.id),
         user.username || "Me",
@@ -933,13 +934,13 @@ function getContentDetailsCloudcast(url) {
     let description = cloudcast.description || "";
 
   if (!isMixCloudOwnChannelContent) {
-    description += `\n\nBy <a href="${cloudcast.owner.url}">${cloudcast.owner.displayName}</a>`;
+    description += `\n\n<a href="${cloudcast.owner.url}">${cloudcast.owner.displayName}</a>`;
   } else {
     
     const creator = cloudcast?.creatorAttributions?.edges?.[0]?.node;
     
     if (creator) {
-      description += `\n\nFor <a href="${creator.url}">${creator.displayName}</a>`;
+      description += `\n\n<a href="${creator.url}">${creator.displayName}</a>`;
     }
   }
   

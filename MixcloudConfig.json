@@ -8,7 +8,7 @@
   "scriptUrl": "./MixcloudScript.js",
   "iconUrl": "./MixcloudIcon.png",
   "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
-  "version": 6,
+  "version": 7,
   "id": "84331338-b045-419c-88e4-c86036f4cbf5",
   "scriptSignature": "",
   "scriptPublicKey": "",
@@ -68,6 +68,9 @@
       "Fix: Content recommendations for live streams;"
     ],
     "6": [
+     "Improvement: Fix relationship between DJs and Radios in content description;"
+    ],
+    "7": [
       "Improvement: Add exclusive subscriber-only content support;"
     ]
   }
