@@ -8,7 +8,7 @@
   "scriptUrl": "./MixcloudScript.js",
   "iconUrl": "./MixcloudIcon.png",
   "repositoryUrl": "https://gitlab.futo.org/videostreaming/plugins/mixcloud",
-  "version": 5,
+  "version": 6,
   "id": "84331338-b045-419c-88e4-c86036f4cbf5",
   "scriptSignature": "",
   "scriptPublicKey": "",
@@ -66,6 +66,9 @@
     ],
     "5": [
       "Fix: Content recommendations for live streams;"
+    ],
+    "6": [
+      "Improvement: Add exclusive subscriber-only content support;"
     ]
   }
 }
