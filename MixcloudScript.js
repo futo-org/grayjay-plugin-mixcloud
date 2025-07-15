@@ -1075,13 +1075,12 @@ function getContentDetailsLiveStream(url) {
  * 
  * @param {Object} cloudcast - The cloudcast object to check
  * @param {boolean} cloudcast.isExclusive - Whether the cloudcast is exclusive content
- * @param {string} cloudcast.previewUrl - Preview URL if available
  * @param {Object} cloudcast.owner - The cloudcast owner object
  * @param {boolean} cloudcast.owner.isSubscribedTo - Whether user is subscribed to the owner
  * @returns {boolean} True if the cloudcast is a limited preview, false otherwise
  */
 function isLimitedPreview(cloudcast) {
-  return !!cloudcast.isExclusive && !!cloudcast.previewUrl && !cloudcast?.owner.isSubscribedTo;
+  return cloudcast.isExclusive && !cloudcast?.owner.isSubscribedTo;
 }
 
 /**
@@ -3298,6 +3297,7 @@ query CloudcastLookup($lookup: CloudcastLookup!) {
 			hlsDrmUrl
 		}
 		owner {
+      isSubscribedTo
 			hasProFeatures
 			username
 			isBranded
