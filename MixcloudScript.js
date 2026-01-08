@@ -868,6 +868,7 @@ function getContentDetailsCloudcast(url) {
         url: hlsUrl,
         duration: cloudcast.audioLength,
         language: "Unknown",
+        original: true
       }));
     }
 
@@ -916,6 +917,7 @@ function getContentDetailsCloudcast(url) {
       url: playlistUrl,
       duration: cloudcast.audioLength,
       language: "Unknown",
+      original: true
     }));
   }
   else if (isPreview) {
